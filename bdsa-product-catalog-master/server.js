@@ -3,7 +3,7 @@ var Sequelize = require("sequelize")
 var nodeadmin = require("nodeadmin")
 
 //connect to mysql database
-var sequelize = new Sequelize('catalog', 'root', '', {
+var sequelize = new Sequelize('catalog', 'username1', 'password', {
     dialect:'mysql',
     host:'localhost'
 })
@@ -34,7 +34,11 @@ var Reviews = sequelize.define('reviews', {
 })
 
 Products.belongsTo(Categories, {foreignKey: 'category_id', targetKey: 'id'})
-Products.hasMany(Reviews, {foreignKey: 'product_id'});
+Products.hasMany(Reviews, {foreignKey: 'product_id'})
+Reviews.belongsTo(Products, {foreignKey: 'product_id', targetKey: 'id'})
+
+//Reviews.hasOne(Products, {foreignKey: 'id', sourceKey:'product_id'});
+
 
 var app = express()
 
@@ -172,6 +176,8 @@ app.put('/products/:id', function(request, response) {
     })
 })
 
+
+
 app.delete('/products/:id', function(request, response) {
     Products.findById(request.params.id).then(function(product) {
         if(product) {
@@ -193,7 +199,7 @@ app.get('/categories/:id/products', function(request, response) {
                 where: { id: Sequelize.col('products.category_id') }
             }, {
                 model: Reviews,
-                where: { id: Sequelize.col('products.id')},
+                where: { product_id: Sequelize.col('products.id')},
                 required: false
             }]
         }
@@ -205,14 +211,51 @@ app.get('/categories/:id/products', function(request, response) {
 })
 
 app.get('/reviews', function(request, response) {
-    Reviews.findAll().then(function(reviews){
-        response.status(200).send(reviews)
-    })
+       Reviews.findAll(
+        {
+            include: [{
+                model: Products,
+                where: { id: Sequelize.col('reviews.product_id') }
+            }]
+        }
+        
+        ).then(
+            function(reviews) {
+                response.status(200).send(reviews)
+            }
+        )
 })
 
+
+
+
 app.get('/reviews/:id', function(request, response) {
-    
+     Reviews.findById(request.params.id).then(
+            function(review) {
+                response.status(200).send(review)
+            }
+        )
 })
+    
+    
+    app.get('/products/:id', function(request, response) {
+    Products.findById(request.params.id, {
+            include: [{
+                model: Categories,
+                where: { id: Sequelize.col('products.category_id') }
+            }, {
+                model: Reviews,
+                where: { id: Sequelize.col('products.id')},
+                required: false
+            }]
+        }).then(
+            function(product) {
+                response.status(200).send(product)
+            }
+        )
+})
+
+
 
 app.post('/reviews', function(request, response) {
     Reviews.create(request.body).then(function(review) {
@@ -221,11 +264,29 @@ app.post('/reviews', function(request, response) {
 })
 
 app.put('/reviews/:id', function(request, response) {
-    
+    Reviews.findById(request.params.id).then(function(review) {
+        if(review) {
+            review.update(request.body).then(function(review){
+                response.status(201).send(review)
+            }).catch(function(error) {
+                response.status(200).send(error)
+            })
+        } else {
+            response.status(404).send('Not found')
+        }
+    })
 })
 
 app.delete('/reviews/:id', function(request, response) {
-    
+       Reviews.findById(request.params.id).then(function(review) {
+        if(review) {
+            review.destroy().then(function(){
+                response.status(204).send()
+            })
+        } else {
+            response.status(404).send('Not found')
+        }
+    })
 })
 
 app.listen(8080)
